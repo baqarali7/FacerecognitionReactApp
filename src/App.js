@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import './App.css';
 import Particles from 'react-particles-js';
-import Clarifai from 'clarifai';
 import Navigation from './components/navigation/navigation'
 import FaceRecognition from './components/FaceRecognition/FaceRecognition'
 import Logo from './components/Logo/Logo'
@@ -10,9 +9,6 @@ import Registor from './components/Registor/Registor'
 import ImageLink from './components/ImageLink/ImageLink'
 import Rank from './components/Rank/Rank'
 
-const app = new Clarifai.App({
-  apiKey: '148ff05b3f244be58dc4ec3d30d6c25d'
- });
 
 const ParticleOptions = {
   "particles": {
@@ -42,18 +38,42 @@ const ParticleOptions = {
   }
 }
 
+const initialState = {
+  input: '',
+  ImageUrl: '',
+  box: {},
+  route: 'signin',
+  isSignedIn: false,
+  user: {
+    'id' : '',
+    'name' : '',
+    'Hobbies' : '',
+    'passion' : '',
+    'date' : '',
+    'email' : '',
+    'entries' : '0'
+  }
+}
 class App extends Component {
 
   constructor () {
     super();
-    this.state = {
-      input: '',
-      ImageUrl: '',
-      box: {},
-      route: 'signin',
-      isSignedIn: false
-    }
+    this.state = initialState;
   }
+
+  loadUser = (data) =>{
+    this.setState({user : {
+      'id' : data.id,
+      'name' : data.name,
+      'Hobbies' : data.Hobbies,
+      'passion' : data.passion,
+      'date' : data.date,
+      'email' : data.email,
+      'entries' : data.entries
+    }
+    })
+  }
+
 
   CalculateFaceLocation = (data) => {
     const ClarifaiFace = data.outputs[0].data.regions[0].region_info.bounding_box;
@@ -79,14 +99,35 @@ class App extends Component {
 
   OnButtonSubmit = () =>{
     this.setState({ImageUrl: this.state.input})
-    app.models.predict(Clarifai.FACE_DETECT_MODEL, this.state.input)
-    .then(response => this.displayFaceBox(this.CalculateFaceLocation(response)))
+    fetch("https://blooming-fortress-28783.herokuapp.com/imageUrl", {
+            method: 'post',
+            headers : {'Content-type':'application/json'},
+            body: JSON.stringify({
+                input : this.state.input
+            })
+            })
+            .then(responce => responce.json())
+            .then(response => {
+              if(response) {
+                fetch("https://blooming-fortress-28783.herokuapp.com/image", {
+                    method: 'put',
+                    headers : {'Content-type':'application/json'},
+                    body: JSON.stringify({
+                        id: this.state.user.id
+                    })
+                    }).then(responce => responce.json())
+                      .then(count => {
+                      this.setState(Object.assign(this.state.user, {entries: count}))
+                })
+      }
+    this.displayFaceBox(this.CalculateFaceLocation(response))
+    })
     .catch (err => console.log(err));
   }
 
   OnRouteChange = (route) =>{
     if(route === 'signout') {
-      this.setState({isSignedIn: false})
+      this.setState(initialState)
     } else if(route=== 'home') {
       this.setState({isSignedIn : true})
     }
@@ -107,7 +148,7 @@ class App extends Component {
         route === 'home' ?
         <div>
         <Logo />
-        <Rank />
+        <Rank name = {this.state.user.name} entries = {this.state.user.entries} id = {this.state.user.id}/>
         <ImageLink 
           OnInputChange={this.OnInputChange}
           OnButtonSubmit = {this.OnButtonSubmit}
@@ -116,8 +157,8 @@ class App extends Component {
         </div>
         : (
           this.state.route === 'signin' ?
-          <SignIn OnRouteChange = {this.OnRouteChange}/>
-        : <Registor OnRouteChange = {this.OnRouteChange}/>
+          <SignIn loadUser = {this.loadUser} OnRouteChange = {this.OnRouteChange}/>
+        : <Registor loadUser = {this.loadUser} OnRouteChange = {this.OnRouteChange}/>
         )
         }
       </div>
